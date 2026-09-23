@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#12102A">
+<title>Word Run</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ground: #12102A;
+    --ground-soft: #1A1740;
+    --text: #F4F1FF;
+    --dim: #8F88C4;
+    --boost: #FFC93C;
+    --surge: #36CFC9;
+    --drag: #FF4D4F;
+    --ease: #B37FEB;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: var(--ground); color: var(--text);
+    font-family: Nunito, ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-weight: 800;
+    user-select: none; -webkit-user-select: none;
+    overscroll-behavior: none; touch-action: none;
+  }
+  /*
+   * height:100dvh, not inset:0. Fixed positioning on iOS measures the LARGE viewport, the one
+   * that exists when the address bar is hidden, so the bottom of the column (the word list,
+   * the banner, the legend) was being laid out underneath Safari's chrome. The dynamic
+   * viewport unit tracks the bar as it comes and goes. 100vh is the fallback for old browsers.
+   */
+  #app {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: 100vh; height: 100dvh;
+    display: flex; flex-direction: column; touch-action: none;
+  }
+
+  /* ---- the track: the destination ---- */
+  #track { padding: calc(var(--safe-top) + 8px) 12px 0; }
+  #trackTop { display: flex; align-items: baseline; gap: 8px; margin-bottom: 5px; }
+  #songName { font-size: 12px; letter-spacing: 1.4px; text-transform: uppercase; }
+  #sectionName { font-size: 10px; color: var(--dim); letter-spacing: 1.6px; text-transform: uppercase; }
+  #trackTop .spacer { flex: 1; }
+  #score { font-size: 20px; font-weight: 900; }
+  #bar {
+    position: relative; height: 9px; border-radius: 999px;
+    background: rgba(244,241,255,0.09); overflow: hidden;
+  }
+  /* The song's shape: one block per phrase, and a playhead riding along it. */
+  #bar { overflow: visible; }
+  /* The climb: six stages. Reached ones light in their style's colour and carry their name. */
+  #bar { height: 16px; }
+  .seg {
+    position: absolute; top: 0; bottom: 0; border-right: 2px solid var(--ground);
+    background: rgba(244,241,255,0.07); color: var(--ground);
+    font-size: 9px; font-weight: 900; letter-spacing: 0.6px; text-transform: uppercase;
+    display: flex; align-items: center; justify-content: center; overflow: hidden; white-space: nowrap;
+  }
+  .seg.done { background: var(--c); opacity: 0.6; }
+  .seg.cur { opacity: 1; box-shadow: 0 0 14px var(--c); animation: throbSeg 0.5s ease-in-out infinite alternate; }
+  @keyframes throbSeg { to { filter: brightness(1.3); } }
+  @media (prefers-reduced-motion: reduce) { .seg.cur { animation: none; } }
+  /* The climb meter: what this phrase still needs from the player. The lever they pull. */
+  #climbWrap { padding: 2px 12px 4px; display: flex; align-items: center; gap: 10px; }
+  #climbWrap .lbl { font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--dim); min-width: 50px; }
+  #climbBar { flex: 1; height: 10px; border-radius: 999px; background: rgba(244,241,255,0.08); position: relative; overflow: hidden; }
+  #climbFill { position: absolute; inset: 0 auto 0 0; width: 0%; border-radius: 999px; background: linear-gradient(90deg, #36CFC9, #B37FEB); transition: width 120ms; }
+  #climbWrap.full #climbFill { background: linear-gradient(90deg, #FFA940, #FFC93C); box-shadow: 0 0 14px rgba(255,201,60,0.8); }
+  #climbTxt { font-size: 11px; font-weight: 900; letter-spacing: 0.6px; min-width: 104px; text-align: right; }
+  #climbWrap.full #climbTxt { color: #FFC93C; }
+  /* The automation meter: fills with streaks, burns gold while the machine is playing. */
+  #autoWrap { padding: 0 12px 2px; display: flex; align-items: center; gap: 10px; }
+  #autoWrap .lbl { font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--dim); min-width: 50px; }
+  #autoBar { flex: 1; height: 6px; border-radius: 999px; background: rgba(244,241,255,0.08); position: relative; overflow: hidden; }
+  #autoWrap.locked { opacity: 0.35; }
+  #autoWrap.on #autoBar { box-shadow: 0 0 14px rgba(255,201,60,0.8); }
+  #autoWrap.on #barFill { width: 100% !important; animation: throbSeg 0.25s infinite alternate; }
+  #barFill {
+    position: absolute; inset: 0 auto 0 0; width: 0%;
+    background: linear-gradient(90deg, #FFA940, #FFC93C); border-radius: 999px; transition: width 150ms;
+  }
+  #hudRight { display: flex; align-items: baseline; gap: 10px; }
+  #bpm { font-size: 12px; color: var(--dim); letter-spacing: 1px; }
+  #bpm::after { content: ' bpm'; font-size: 9px; }
+  #countdown {
+    position: absolute; left: 50%; top: 14px; transform: translateX(-50%) scale(0.9); z-index: 3;
+    font-size: 20px; font-weight: 900; letter-spacing: 3px; color: #FFA940;
+    text-shadow: 0 0 18px rgba(255,169,64,0.8); opacity: 0; transition: opacity 200ms, transform 200ms;
+    pointer-events: none; white-space: nowrap;
+  }
+  #countdown.show { opacity: 1; transform: translateX(-50%) scale(1); animation: throb 0.5s ease-in-out infinite alternate; }
+  @keyframes throb { to { transform: translateX(-50%) scale(1.08); } }
+  @media (prefers-reduced-motion: reduce) { #countdown.show { animation: none; } }
+
+  /* ---- speed ---- */
+  #speedWrap { padding: 8px 12px 4px; display: flex; align-items: center; gap: 10px; }
+  #speedLabel { font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--dim); }
+  #speedBar {
+    flex: 1; height: 14px; border-radius: 999px; position: relative;
+    background: rgba(244,241,255,0.08); overflow: hidden;
+  }
+  #speedFill {
+    position: absolute; inset: 0 auto 0 0; width: 0%; border-radius: 999px;
+    background: linear-gradient(90deg, #FF5C8A, #FFA940, #FADB14);
+    transition: width 90ms linear;
+  }
+  #speedFill.hot { box-shadow: 0 0 18px 3px rgba(255,201,60,0.55); }
+  /* Past the top of the meter, which only happens in the jam. The bar is already full, so the
+     only thing left to say it with is the burn. */
+  #speedFill.over {
+    box-shadow: 0 0 30px 7px rgba(255,77,79,0.75);
+    animation: overBurn 420ms ease-in-out infinite alternate;
+  }
+  @keyframes overBurn { from { filter: brightness(1); } to { filter: brightness(1.5); } }
+  @media (prefers-reduced-motion: reduce) { #speedFill.over { animation: none; } }
+  #speedNum { font-size: 15px; font-weight: 900; min-width: 46px; text-align: right; }
+  #speedNum.low { color: var(--drag); }
+  #speedNum.over { color: #FFC93C; }
+
+  /*
+   * touch-action does NOT inherit. It was set on html and body, but the canvas is a descendant
+   * and so still had the browser's own panning switched on, which meant a downward drag was
+   * read as a page scroll or a pull to refresh instead of as a word. It has to be set here.
+   */
+  /*
+   * overflow:hidden is load bearing. The canvas used to carry an explicit pixel height from
+   * whenever resize() last ran, so a stale measurement let it spill out of this box and paint
+   * straight over the word list below. Now it can never draw outside its own area.
+   */
+  /* The world the strip rides through. It fills the play area; the strip is drawn in its middle. */
+  #boardWrap {
+    flex: 1; position: relative; min-height: 0; width: 100%;
+    overflow: hidden; touch-action: none;
+  }
+  canvas {
+    display: block;
+    width: 100%; height: 100%;
+    touch-action: none;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  /*
+   * The board and the words to hunt, side by side. The list used to sit under the board, which
+   * cost the board vertical height and left it a tall thin rectangle. Down the left it costs
+   * width instead, which is what lets the board be square.
+   */
+  /*
+   * Board on top, words beneath. The list ran down the left for one build and it was a mistake:
+   * measured on a 390 by 620 phone it cost the board 82px of every side, took the letters from
+   * 46px to 36px, and left 58,000 square pixels of the play area empty. Height is the thing
+   * this screen has spare, so the list should spend height, not width.
+   */
+  #playArea {
+    flex: 1; display: flex; flex-direction: column; min-height: 0;
+    gap: 6px; padding: 4px 0 0; align-items: stretch; justify-content: flex-start;
+  }
+
+  #preview {
+    position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
+    display: none; gap: 10px; align-items: baseline;
+    background: rgba(18,16,42,0.9); border-radius: 999px; padding: 6px 16px;
+    font-size: 15px; font-weight: 900; letter-spacing: 0.5px;
+    border: 1px solid rgba(255,255,255,0.12);
+    white-space: nowrap;
+  }
+  #preview.show { display: flex; }
+  /* The letters spell something real. Confirmation before you commit, not after. */
+  #preview.good {
+    border-color: color-mix(in srgb, var(--surge) 70%, transparent);
+    background: color-mix(in srgb, var(--surge) 16%, rgba(18,16,42,0.9));
+    box-shadow: 0 0 18px color-mix(in srgb, var(--surge) 30%, transparent);
+  }
+  /* The word as it forms under your finger. This is the thing you are actually reading. */
+  #preview .word { font-size: 22px; letter-spacing: 3px; text-transform: uppercase; }
+  #preview .note { font-size: 12px; letter-spacing: 1px; opacity: 0.85; }
+
+  /* A word that has just arrived on the board, so you know what is new to look for. */
+  .chip.fresh { animation: arrive 1.6s ease-out; }
+  @keyframes arrive {
+    0% { transform: scale(1.5); filter: brightness(2.2); }
+    30% { transform: scale(1.05); }
+    100% { transform: none; filter: none; }
+  }
+
+  /*
+   * The words to find, in the order they ride the strip: the leftmost chip is the word closest
+   * to sliding off. A row above the strip, because the strip already spends the width.
+   */
+  #newWords {
+    display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; align-content: flex-start;
+    min-height: 58px; padding: 0 10px; pointer-events: none;
+  }
+  #newWords .chip {
+    animation: landIn 420ms cubic-bezier(0.2, 1.2, 0.4, 1);
+    font-size: 11px; letter-spacing: 1px; padding: 4px 9px;
+    background: color-mix(in srgb, var(--c) 24%, rgba(16,13,40,0.9));
+    border-color: color-mix(in srgb, var(--c) 75%, transparent);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+    backdrop-filter: blur(3px);
+  }
+  #newWords .chip.urgent {
+    border-color: var(--drag); box-shadow: 0 0 14px rgba(255,77,79,0.55);
+    animation: urgent 0.45s ease-in-out infinite alternate;
+  }
+  @keyframes urgent { to { transform: scale(1.07); } }
+  @keyframes landIn {
+    0% { transform: translateX(24px) scale(0.82); opacity: 0; }
+    100% { transform: none; opacity: 1; }
+  }
+
+  .chip {
+    font-size: 13px; letter-spacing: 1.4px; text-transform: uppercase;
+    padding: 6px 13px; border-radius: 999px; white-space: nowrap;
+    color: var(--c);
+    border: 1.5px solid color-mix(in srgb, var(--c) 45%, transparent);
+    background: color-mix(in srgb, var(--c) 13%, transparent);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .chip.help { animation: nudge 1.1s ease-in-out infinite; }
+  /* The word under your finger is this one. Its own colour, filled in, so you know which. */
+  .chip.onit {
+    color: var(--ground); background: var(--c); border-color: var(--c);
+    box-shadow: 0 0 16px color-mix(in srgb, var(--c) 55%, transparent);
+    transform: scale(1.08);
+  }
+  @keyframes nudge { 0%,100% { transform: none; } 50% { transform: scale(1.09); } }
+
+  #banner { height: 34px; display: flex; align-items: center; justify-content: center; padding: 0 12px; }
+  #banner .card {
+    display: flex; align-items: baseline; gap: 9px;
+    padding: 5px 14px; border-radius: 999px;
+    border: 1.5px solid color-mix(in srgb, var(--c) 48%, transparent);
+    background: color-mix(in srgb, var(--c) 13%, transparent);
+  }
+  #banner .card b { color: var(--c); font-size: 14px; letter-spacing: 1.5px; text-transform: uppercase; }
+  #banner .card i { color: var(--dim); font-size: 11px; font-style: normal; font-weight: 700; }
+
+  #legend {
+    display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+    padding: 2px 12px calc(var(--safe-bottom) + 8px);
+    font-size: 10px; font-weight: 700; color: var(--dim);
+  }
+  .leg { display: flex; align-items: center; gap: 4px; }
+  .dot { width: 8px; height: 8px; border-radius: 3px; }
+
+  /* ---- screens ---- */
+  /*
+   * These screens must scroll, and two separate things were stopping them.
+   *
+   * touch-action is inherited from #app, which is set to none so the board drag is never read
+   * as a page scroll. That also killed scrolling here, so a screen taller than the phone had a
+   * Start button you could neither reach nor scroll to. pan-y gives these overlays vertical
+   * scrolling back without giving the board any.
+   *
+   * And justify-content:center clips a flex child at BOTH ends once the content overflows, so
+   * even with overflow-y:auto the top and bottom were unreachable. Packing from the top and
+   * centring with auto margins instead scrolls properly.
+   */
+  .screen {
+    position: absolute; inset: 0; z-index: 5;
+    background: rgba(18,16,42,0.97);
+    display: none; flex-direction: column; align-items: center; justify-content: flex-start;
+    padding: 16px 20px; text-align: center; gap: 8px;
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+  }
+  .screen.show { display: flex; }
+  /* Centred when it fits, scrolled from the top when it does not. */
+  .screen > :first-child { margin-top: auto; }
+  .screen > :last-child { margin-bottom: auto; }
+  h1 { font-size: 30px; font-weight: 900; margin: 0; letter-spacing: -1px; }
+  h2 { font-size: 22px; font-weight: 900; margin: 0; }
+  .sub { color: var(--dim); font-size: 12px; font-weight: 700; max-width: 340px; line-height: 1.45; margin: 0; }
+  button {
+    font-family: inherit; font-weight: 900; font-size: 16px; letter-spacing: 0.5px;
+    padding: 12px 28px; border-radius: 999px; border: 0; cursor: pointer;
+    background: var(--text); color: var(--ground); margin-top: 4px;
+  }
+  button.ghost { background: transparent; color: var(--dim); border: 1.5px solid rgba(255,255,255,0.16); }
+
+  .rules { max-width: 360px; display: flex; flex-direction: column; gap: 7px; text-align: left; margin: 2px 0; }
+  .rule { display: flex; gap: 11px; align-items: flex-start; }
+  .rule .n {
+    flex: none; width: 19px; height: 19px; border-radius: 999px;
+    background: rgba(244,241,255,0.1); display: grid; place-items: center;
+    font-size: 11px; font-weight: 900;
+  }
+  .rule p { margin: 0; font-size: 12px; line-height: 1.35; font-weight: 700; }
+  .rule p b { color: var(--text); }
+  .rule p span { color: var(--dim); font-weight: 700; }
+
+  .powerups {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px;
+    width: min(340px, 90vw); margin: 2px 0 4px; text-align: left;
+  }
+  .pu { display: flex; align-items: baseline; gap: 6px; font-size: 11px; }
+  .pu b { font-size: 12px; }
+  .pu span { color: var(--dim); font-weight: 700; font-size: 10px; }
+
+  .tracks { display: flex; flex-direction: column; gap: 6px; width: min(340px, 90vw); margin: 2px 0; }
+  .trackBtn {
+    display: flex; align-items: center; gap: 10px; text-align: left;
+    padding: 11px 16px; border-radius: 16px; cursor: pointer;
+    background: rgba(244,241,255,0.06); border: 1.5px solid rgba(244,241,255,0.12);
+  }
+  .trackBtn.locked { opacity: 0.42; cursor: not-allowed; }
+  .trackBtn.sel { border-color: var(--surge); background: rgba(54,207,201,0.14); }
+  .trackBtn b { font-size: 15px; }
+  .trackBtn i { font-style: normal; font-size: 11px; color: var(--dim); font-weight: 700; }
+  .trackBtn .col { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+
+  .finalRow { display: flex; gap: 24px; margin-top: 2px; }
+  .finalRow div { display: flex; flex-direction: column; }
+  .finalRow b { font-size: 23px; font-weight: 900; }
+  .finalRow span { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 1.1px; }
+  .listenLink { color: var(--dim); font-size: 12px; margin-top: 6px; }
+  /* A prototype's own meters and buttons. */
+  #modePanel { display: none; padding: 2px 12px 4px; }
+  #modePanel.show { display: block; }
+  #modeName { font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase; color: #FFC93C; margin-bottom: 3px; }
+  .mrow { display: flex; align-items: center; gap: 10px; margin: 3px 0; }
+  .mrow .lbl { font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--dim); min-width: 50px; }
+  .mrow .mbar { flex: 1; height: 8px; border-radius: 999px; background: rgba(244,241,255,0.08); overflow: hidden; }
+  .mrow .mfill { height: 100%; width: 0%; border-radius: 999px; transition: width 120ms; }
+  .mrow .mtxt { font-size: 10px; font-weight: 900; min-width: 110px; text-align: right; }
+  .mrow.alert .mtxt { color: var(--drag); }
+  .mrow.alert .mbar { box-shadow: 0 0 10px rgba(255,77,79,0.7); }
+  #modeButtons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; touch-action: manipulation; }
+  #modeButtons button { font-size: 12px; padding: 7px 12px; margin: 0; background: rgba(255,201,60,0.16); color: #FFC93C; border: 1.5px solid rgba(255,201,60,0.5); }
+  #modeButtons button:disabled { opacity: 0.4; }
+  #modeNote { font-size: 10px; color: var(--dim); margin-top: 3px; min-height: 12px; }
+  .protoHead { margin-top: 14px; }
+  .trackBtn.proto { border-color: rgba(255,201,60,0.35); }
+  .saveBtn { display: inline-block; margin-top: 6px; padding: 11px 24px; border-radius: 999px; background: #FFC93C; color: var(--ground); font-weight: 900; text-decoration: none; }
+  #songAudio { width: min(340px, 90vw); margin-top: 6px; }
+  .unlock { color: var(--boost); font-size: 14px; font-weight: 900; letter-spacing: 0.4px; }
+</style>
+  <script type="module" crossorigin src="./assets/main-DNpAXkC_.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/songs-CHzk5jMe.js">
+</head>
+<body>
+<div id="app">
+  <div id="track">
+    <div id="trackTop">
+      <div id="songName">First Light</div>
+      <div id="sectionName">intro</div>
+      <div class="spacer"></div>
+      <div id="hudRight"><div id="bpm">0</div><div id="score">0</div></div>
+    </div>
+    <div id="bar"></div>
+  </div>
+
+  <div id="speedWrap">
+    <div id="speedLabel">heat</div>
+    <div id="speedBar"><div id="speedFill"></div></div>
+    <div id="speedNum">0%</div>
+  </div>
+
+  <div id="climbWrap"><div class="lbl">climb</div><div id="climbBar"><div id="climbFill"></div></div><div id="climbTxt"></div></div>
+  <div id="modePanel">
+    <div id="modeName"></div>
+    <div id="modeRows"></div>
+    <div id="modeButtons"></div>
+    <div id="modeNote"></div>
+  </div>
+  <div id="autoWrap" class="locked"><div class="lbl" id="autoLbl">auto</div><div id="autoBar"><div id="barFill"></div></div></div>
+  <div id="playArea">
+    <div id="newWords"></div>
+    <div id="boardWrap">
+      <canvas id="board"></canvas>
+      <div id="preview"></div>
+      <div id="countdown"></div>
+    </div>
+    <div id="banner"></div>
+  </div>
+
+  <div id="title" class="screen show">
+    <h1>Word Run</h1>
+    <p class="sub">You build the song. Find words, pile on heat, climb to CHAOS.</p>
+    <div class="rules">
+      <div class="rule"><div class="n">1</div><p><b>Drag through letters to spell a word.</b> <span>Each word on the list has its first letter lit.</span></p></div>
+      <div class="rule"><div class="n">2</div><p><b>Finds are heat. Heat builds the song.</b> <span>Stay hot and it climbs: faster, heavier, wilder.</span></p></div>
+      <div class="rule"><div class="n">3</div><p><b>Every checkpoint changes the band.</b> <span>Synths, guitars, breakbeats. Different every run.</span></p></div>
+      <div class="rule"><div class="n">4</div><p><b>Streaks charge automations.</b> <span>The machine solves words on the beat alongside you.</span></p></div>
+      <div class="rule"><div class="n">5</div><p><b>Reach CHAOS and hold it to win.</b> <span>Go cold too long and the band walks off.</span></p></div>
+    </div>
+    <div class="powerups">
+      <div class="pu"><i class="dot" style="background:#FFC93C"></i><b>Boost</b><span>double score and a lift</span></div>
+      <div class="pu"><i class="dot" style="background:#36CFC9"></i><b>Surge</b><span>a burst of energy</span></div>
+      <div class="pu"><i class="dot" style="background:#B37FEB"></i><b>Ease</b><span>energy drains slower for a while</span></div>
+      <div class="pu"><i class="dot" style="background:#FF4D4F"></i><b>Drag</b><span>costs you energy</span></div>
+      <div class="pu"><i class="dot" style="background:#5CDB95"></i><b>Beacon</b><span>lights where words start</span></div>
+      <div class="pu"><i class="dot" style="background:#F0F0F5"></i><b>Ghost</b><span>flashes one whole word</span></div>
+    </div>
+
+    <div class="tracks" id="tracks"></div>
+    <button id="play">Start the climb</button>
+    <p class="sub protoHead">Prototypes: where the game could go next. Try each and pick.</p>
+    <div class="tracks" id="protos"></div>
+    <a class="listenLink" href="listen.html">Music lab: build a song with a heat slider</a>
+  </div>
+
+  <div id="over" class="screen">
+    <h2 id="overTitle">Faded out</h2>
+    <p class="sub" id="overSub"></p>
+    <div class="finalRow">
+      <div><b id="finalScore">0</b><span>score</span></div>
+      <div><b id="finalWords">0</b><span>words</span></div>
+      <div><b id="finalBest">0</b><span>peak bpm</span></div>
+      <div><b id="finalReach">0%</b><span id="finalReachLabel">of the song</span></div>
+    </div>
+    <div class="unlock" id="unlockLine"></div>
+    <p class="sub" id="recap"></p>
+    <audio id="songAudio" controls style="display:none"></audio>
+    <a id="saveSong" class="saveBtn" style="display:none">Save your song</a>
+    <button id="again">Run it again</button>
+    <button id="menu" class="ghost">Pick a track</button>
+  </div>
+</div>
+</body>
+</html>

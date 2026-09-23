@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#12102A">
+<title>Word Run Music Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ground: #12102A; --text: #F4F1FF; --dim: #8F88C4;
+    --intro: #6C63B5; --build: #36CFC9; --riser: #FFA940; --drop: #FF4D6D;
+    --drive: #B37FEB; --breakdown: #4C8DFF; --finale: #FFC93C; --outro: #6C63B5;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; min-height: 100%; background: var(--ground); color: var(--text);
+    font-family: Nunito, ui-rounded, system-ui, sans-serif; font-weight: 800;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: calc(env(safe-area-inset-top, 0px) + 18px) 16px 40px; display: flex; flex-direction: column; gap: 18px; }
+  h1 { margin: 0; font-size: 26px; font-weight: 900; letter-spacing: -0.5px; }
+  .sub { margin: 4px 0 0; color: var(--dim); font-size: 13px; line-height: 1.45; }
+  a { color: var(--dim); }
+  .tracks { display: flex; gap: 8px; flex-wrap: wrap; }
+  .tracks button, .ctl button {
+    font-family: inherit; font-weight: 900; font-size: 15px; padding: 10px 18px; border-radius: 999px;
+    border: 1.5px solid rgba(244,241,255,0.16); background: rgba(244,241,255,0.06); color: var(--text); cursor: pointer;
+  }
+  .tracks button.sel { border-color: #36CFC9; background: rgba(54,207,201,0.16); }
+  .ctl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .ctl button.primary { background: var(--text); color: var(--ground); border-color: var(--text); min-width: 96px; }
+  .ctl button.on { border-color: #FFC93C; color: #FFC93C; }
+  .now { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .stat { background: rgba(244,241,255,0.05); border-radius: 14px; padding: 10px 12px; }
+  .stat b { display: block; font-size: 22px; font-weight: 900; text-transform: uppercase; }
+  .stat span { font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--dim); }
+  #kind { color: var(--c, var(--text)); }
+  #pulse { width: 14px; height: 14px; border-radius: 99px; background: var(--text); opacity: 0.15; transition: opacity 90ms, transform 90ms; display: inline-block; vertical-align: middle; margin-left: 8px; }
+  #pulse.hit { opacity: 1; transform: scale(1.35); }
+  #pulse.bar { background: #FFC93C; }
+  .timeline { position: relative; height: 54px; display: flex; border-radius: 12px; overflow: hidden; cursor: pointer; }
+  .timeline div.ph { height: 100%; border-right: 2px solid var(--ground); opacity: 0.55; position: relative; }
+  .timeline div.ph span { position: absolute; left: 5px; bottom: 4px; font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--ground); white-space: nowrap; overflow: hidden; max-width: calc(100% - 6px); }
+  .timeline div.ph.cur { opacity: 1; }
+  #head { position: absolute; top: 0; bottom: 0; width: 3px; background: var(--text); box-shadow: 0 0 10px var(--text); pointer-events: none; }
+  .energy { display: flex; flex-direction: column; gap: 8px; }
+  .energy label { display: flex; justify-content: space-between; font-size: 13px; color: var(--dim); }
+  .energy label b { color: var(--text); font-size: 18px; }
+  input[type=range] { width: 100%; accent-color: #FF5C8A; height: 34px; }
+  .ladder { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+  .ladder .step { border-radius: 10px; padding: 8px 6px; background: rgba(244,241,255,0.05); text-align: center; border: 1.5px solid transparent; }
+  .ladder .step b { display: block; font-size: 12px; }
+  .ladder .step i { display: block; font-style: normal; font-size: 10px; color: var(--dim); min-height: 13px; }
+  .ladder .step.on { background: color-mix(in srgb, var(--c) 25%, transparent); }
+  .ladder .step.cur { border-color: var(--c); box-shadow: 0 0 14px var(--c); }
+  .timeline { min-height: 40px; }
+  .parts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .parts span {
+    font-size: 12px; letter-spacing: 1px; text-transform: uppercase; padding: 5px 11px; border-radius: 999px;
+    border: 1.5px solid rgba(244,241,255,0.14); color: var(--dim); transition: all 150ms;
+  }
+  .parts span.live { color: var(--ground); background: #36CFC9; border-color: #36CFC9; }
+  .note { font-size: 12px; color: var(--dim); line-height: 1.5; }
+  @media (max-width: 520px) { .now { grid-template-columns: repeat(2, 1fr); } }
+</style>
+  <script type="module" crossorigin src="./assets/listen-BIFTMKda.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/songs-CHzk5jMe.js">
+</head>
+<body>
+<main>
+  <div>
+    <h1>Music lab <span id="pulse"></span></h1>
+    <p class="sub">Build a song without playing. The heat slider stands in for a player: the higher it is, the more often
+      it finds a word, and every word is played as a riff and charges the climb. Fill the climb in a phrase and the song
+      rises a stage, with a new style, until CHAOS. Every play is a new song. <a href="index.html">Back to the game</a></p>
+  </div>
+  <div class="tracks" id="tracks"></div>
+  <div class="ctl">
+    <button class="primary" id="play">Play a new song</button>
+    <button id="auto">Simulate a player</button>
+  </div>
+  <div class="ladder" id="ladder"></div>
+  <div class="now">
+    <div class="stat"><b id="stage">Spark</b><span>stage</span></div>
+    <div class="stat"><b id="style">Spark</b><span>style</span></div>
+    <div class="stat"><b id="bpm">0</b><span>tempo, bpm</span></div>
+    <div class="stat"><b id="kind">intro</b><span id="clock">0:00</span></div>
+    <div class="stat"><b id="climb">0/5</b><span>climb this phrase</span></div>
+    <div class="stat"><b id="lastWord">none</b><span>last word played</span></div>
+  </div>
+  <div class="energy">
+    <label>Heat <b id="energyNum">60%</b></label>
+    <input type="range" id="energy" min="0" max="100" value="60">
+  </div>
+  <div class="timeline" id="timeline"></div>
+  <p class="note" id="plan"></p>
+  <p class="note">Each word is worth its length minus two. Fill a stage's quota within one four bar phrase and the next
+    phrase is a riser; overfill it by half again and the riser is short. A phrase with no finds breaks down. In
+    CHAOS, heat under 30 percent drops you back to Inferno.</p>
+</main>
+</body>
+</html>
